@@ -1,0 +1,381 @@
+---
+title: "Untitled"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(stringr)
+library(dplyr)
+library(engsoccerdata)
+library(knitr)
+data(package="engsoccerdata")
+```
+
+سوال 1
+تعداد قهرمانی های تیم ها، در تاریخ لالیگا را استخراج کرده و بر حسب تعداد
+مرتب سازی کنید. نمودار ستونی نتایج بیست تیم پر افتخار را رسم کنید.
+
+برای پاسخ گویی به این سوال ابتدا دو ستون امتیاز تیم میزبان و امتیاز تیم مهمان را به جدول داده ها اضافه می کنیم.
+با در نظر گرفتن اینکه تا فصل 1995 هر تیم به ازای برد 2 امتیاز می گرفت ولی بعد از آن فصل، با تغییر قوانین به هر برد 3 امتیاز تعلق می گیرد،امتیاز تیم مهمان و میزبان برای هر بازی به جدول اضافه شد.
+
+```{r}
+spain <- spain %>% 
+  mutate(h_point=ifelse((hgoal-vgoal>0 & Season>1995),3,sign(hgoal-vgoal)+1))
+spain <- spain %>% 
+  mutate(v_point=ifelse((vgoal-hgoal>0 & Season>1995),3,sign(vgoal-hgoal)+1))
+```
+
+برای محاسبه امتیاز تیمها و رده بندی تیم ها به تفکیک فصل سه به علاوه گل زده و گل خورده و تفاضل گل تابع زیر تعریف شده است.
+
+```{r}
+gamepoint<- function(df){
+  h_teams <- data.frame(Date=df$Date, Season=df$Season,Team=df$home, Point=df$h_point, GF=df$hgoal,GA=df$vgoal)
+  v_teams <- data.frame(Date=df$Date, Season=df$Season,Team=df$visitor, Point=df$v_point, GF=df$vgoal,GA=df$hgoal)
+bind_rows(h_teams,v_teams) %>% 
+  arrange(Date)
+}
+
+teampoint <- function(df){
+  gamepoint(df) %>% 
+    group_by(Season,Team) %>% 
+    summarise(Total_point=sum(Point),Total_GF=sum(GF),Total_GA=sum(GA),games_played=n()) %>% 
+    mutate(GD=Total_GF-Total_GA)
+}
+
+teamrank <- function(df){
+  teampoint(df) %>% 
+    group_by(Season) %>% 
+    arrange(desc(Total_point,GD), .by_group=TRUE ) %>% 
+    mutate(Pos=row_number())
+}
+```
+
+امتیاز تیمها و رده بندی تیم ها در کل ادوار لالیگا به تفکیک فصل به علاوه گل زده و گل خورده و تفاضل گل در زیر محاسبه شده است.
+
+```{r message=FALSE, warning=FALSE}
+team_points <- teampoint(spain)
+
+team_rank <- teamrank(spain)
+
+```
+
+با توجه به محاسبات بالا به قسمت اول سوال 1 پاسخ می دهیم.
+سوال 1. قسمت اول: تعداد قهرمانی های تیم ها در تاریخ لالیگا
+
+```{r message=FALSE, warning=FALSE}
+champions <- filter(team_rank,Pos==1) %>% 
+  group_by(Team) %>% 
+  summarise(n_champion=n()) %>% 
+  arrange(desc(n_champion))
+kable(champions,col.names=c('Teams','Number of Championships'),caption = "Laliga champions 1928-2015")
+```
+همانطور که در جدول بالا دیده می شود 9 تیم سابقه قهرمانی در لالیگا تا فصل 2015 داشته اند. رئال مادرید با 32 قهرمانی در رده اول و بارسلونا با 25 قهرمانی در رده دوم قرار دارد.
+
+برای پیدا کردن 20 تیم پرافتخار، سابقه کسب مقام اول، دوم، سوم و چهارم در هر فصل را درنظر گرفتیم. اگر فقط مقام اول، دوم و سوم را درنظر می گرفتیم تعداد کل تیمهایی که سابقه کسب این سه مقام را داشتند 18 مورد بود. با درنظر گرفتن این مساله عنوان اول تا چهارم معیار افتخار برای تیمها درنظر گرفته شد. به این صورت که ابتدا سابقه کسب قهرمانی اهمیت دارد، در نتیجه 9 تیم اول همان تیمهایی هستند که در بالا نشان داده شده اند. پس از آن نایب قهرمانی بالاترین ارزش را دارد و پس از آن مقام سوم و چهارم.
+به این منظور کلیه تیمها را براساس تعداد قهرمانی، نایب قهرمانی، مقام سوم و مقام چهارم فهرست کرده و 20 تیم اول را انتخاب کردیم.
+
+```{r message=FALSE, warning=FALSE}
+performance <- filter(team_rank,Pos %in% c(1,2,3,4)) %>% 
+  group_by(Team,Pos) %>% 
+  summarise(freq=n()) 
+  
+n_distinct(performance$Team)  
+```
+همانطور که مشاهده می شود 25 تیم سابقه کسب مقامهای اول تا چهارم را دارا هستند.
+برای تعیین 20 تیم پرافتخار محاسبات زیر انجام شده است.
+
+```{r}
+performance_sp <- performance %>% 
+  spread(Pos,freq)
+performance_sp[is.na(performance_sp)] <- 0  
+performance_sp <- performance_sp %>%
+  rename("1st"="1","2nd"="2","3rd"="3","4th"="4")
+performance_sp <- performance_sp %>%
+  arrange(desc(/1/st))
+performance_sp
+first20 <- performance_sp[1:20,]
+first20 <- first20 %>% 
+  arrange(desc('1st','2nd','3rd','4th'))
+kable(first20)
+print(performance_sp)
+
+first20g <- first20 %>% gather(Result,number,-Team)
+plt1 <- first20g %>% ggplot(aes(x=reorder(Team,number),
+                    y=number))+
+                    geom_col(aes (fill=Result))+
+                    coord_flip()+
+                    facet_grid(~Result)+
+                    labs(title = "Top 20 Teams in La Liga History")+
+                                xlab("Teams")+ 
+                                ylab("Number of championships, runner-ups, thirds and forths")
+  
+plt1 
+```
+نمودار بالا تعداد مقامهای اول تا چهارم را برای 20 تیم پرافتخار لالیگا را نشان می دهد.
+
+
+سوال 2
+کسل کننده ترین و هیجان انگیزترین لیگ و تیم را بیابید. نمودار ستونی ده تیم و ده
+فصل کسل کننده را رسم کنید.
+
+سوال 2- قسمت اول: کسل کننده ترین و هیجان انگیزترین فصل. و 10 فصل کسل کننده
+
+```{r}
+season_excitement <- spain %>% 
+  group_by(Season) %>% 
+  summarise(goal_per_game=round(sum(hgoal+vgoal)/n(),2)) %>% 
+  arrange(goal_per_game)
+
+most_exciting_season <- season_excitement[nrow(season_excitement),"Season"] %>% 
+  .$Season
+cat("Most exciting season: ", most_exciting_season)
+
+least_exciting_season <- season_excitement[1,1] %>% 
+  .$Season
+cat("Least exciting season: ", least_exciting_season)
+ten_least_exciting_seasons <- season_excitement[1:10,]
+#plot(ten_least_exciting_seasons$Season,ten_least_exciting_seasons$goal_per_game,type = "h")
+barplot(ten_least_exciting_seasons$goal_per_game ~ ten_least_exciting_seasons$Season)
+```
+
+سوال 2- قسمت دوم: کسل کننده ترین و هیجان انگیزترین تیم در کل فصل ها. و 10 تیم کسل کننده
+
+```{r}
+team_excitement <- team_points %>% 
+  group_by(Team) %>% 
+  summarise(goal_per_game=round(sum(Total_GF)/sum(games_played),2)) %>% 
+  arrange(goal_per_game)
+
+most_exciting_team <- team_excitement[nrow(team_excitement),1] %>% 
+  .$Team
+cat("Most exciting team: ", most_exciting_team)
+
+least_exciting_team <- team_excitement[1,1] %>% 
+  .$Team
+cat("Least exciting team: ", least_exciting_team)
+ten_least_exciting_team <- team_excitement[1:10,]
+barplot(ten_least_exciting_team$goal_per_game ~ ten_least_exciting_team$Team)
+```
+
+```{r}
+team_points %>%
+  filter(Team=="FC Barcelona") %>%
+  ungroup() %>% 
+  summarise(s=sum(games_played)) %>% 
+  .$s
+
+```
+
+
+```{r}
+team_points %>% 
+  filter(Season==2005) %>% 
+  arrange(desc(Total_point))
+```
+
+
+سوال 4: پیدا کردن 3 تیم بزرگ
+
+```{r}
+first_decay_20 <- team_rank %>% 
+  filter(Season %in% 2001:2010 & Pos<4) %>% 
+  group_by(Team,Pos) %>%
+  summarise(freq=n()) %>% 
+  arrange(Pos,desc(freq))
+top_3_team <- first_decay_20[1:3,1] %>% 
+  .$Team
+```
+
+سوال 4: چه تیم هایی از 3 تیم بزرگ امتیاز گرفته اند
+```{r}
+spain_2001_2010 <- spain %>% 
+  filter(Season %in% 2001:2010)
+top_teams_games <- spain_2001_2010 %>% 
+  filter(home %in% top_3_team | visitor %in% top_3_team) %>% 
+  filter(!(home %in% top_3_team & visitor %in% top_3_team))  # bazi 3 team ba ham hazf shod
+
+#table(top_teams_games$home)
+
+bcat_performance <- top_teams_games %>% 
+  filter((home %in% top_3_team & h_point<3)|(visitor %in% top_3_team & v_point<3))
+
+```
+
+سوال 4: گربه سیاه های سه تیم بزرگ در فاصله سالهای 2001 تا 2010
+```{r}
+bcats <- data.frame("FC_Barcelona"=rep(" ",6), "Real_Madrid"=rep(" ",6),  "Valencia_CF"=rep(" ",6))
+
+for(i in 1:3){
+  bcat_team <- bcat_performance %>% 
+  filter(home==top_3_team[i]|visitor==top_3_team[i]) %>% 
+  select(Season,home,visitor,h_point,v_point)
+hteam <- bcat_team %>% 
+  select(Season,home,h_point)
+hteam <- hteam %>% 
+  rename("Team"="home","point"="h_point")
+vteam <- bcat_team %>% 
+  select(Season,visitor,v_point)
+vteam <- vteam %>% 
+  rename(Team=visitor,point=v_point)
+Tteam <- bind_rows(hteam,vteam)
+cat("\n Black cats of ",top_3_team[i]," are the following with points they make.")
+
+Tteam %>% 
+  filter(Team!=top_3_team[i]) %>% 
+  group_by(Team) %>% 
+  summarise(points=sum(point)) %>% 
+  arrange(desc(points)) %>% 
+  head() %>% 
+  print()
+}
+
+```
+
+سوال 3: مشخص کردن اینکه کدام بازی ها در نیم فصل اول انجام شده و کدام در نیم فصل دوم
+
+```{r}
+hv <- data.frame(plays=paste(spain$home,spain$visitor,spain$Date,sep=""),R_F="Real",index=1:nrow(spain))
+vh <- data.frame(plays=paste(spain$visitor,spain$home,spain$Date,sep=""),R_F="Fake",index=1:nrow(spain))
+
+# We have one missing data in spain dataframe: UD Salamanca as visitor vs CD Malaga as home in season 1979 
+missing_play <- data.frame(plays=c("UD SalamancaCD Malaga1979-12-31","CD MalagaUD Salamanca1979-12-31"),R_F="Fake",index=1:2)
+
+vh <- bind_rows(vh,missing_play)
+
+semiseason_col <- bind_rows(hv,vh) %>% 
+  arrange(plays) %>% 
+  mutate(semiseason=rep(1:2,nrow(spain)+1)) %>% 
+  filter(R_F=="Real") %>% 
+  arrange(index) %>% 
+  select(semiseason) %>% 
+  .$semiseason
+
+spain <- spain %>% 
+  mutate(Semiseason=semiseason_col)
+```
+
+سوال 3: پیدا کردن قهرمانهای نیم فصل و مقایسه آنها با قهرمان فصل و محاسبه اینکه در چند درصد موارد قهرمان نیم فصل در پایان فصل قهرمان شده است
+
+```{r}
+first_semiseason_champions <- spain %>% 
+  filter(Semiseason==1) %>% 
+  teamrank() %>% 
+  filter(Pos==1) %>% 
+  select(Season,Team)
+#view(first_semiseason_champions)
+
+season_champions <- team_rank %>% 
+  filter(Pos==1) %>% 
+  select(Season,Team)
+#view(season_champions)
+
+round(sum(first_semiseason_champions$Team==season_champions$Team)/nrow(season_champions)*100, 2)
+```
+
+سوال 8: اضافه کردن گاهای نیمه اول مربوط به تیم مهمان و میزبان به حدول
+
+```{r}
+spain <- spain %>% 
+  mutate(HT_hgoal=as.integer(str_sub(spain$HT,1,1)),HT_vgoal=as.integer(str_sub(spain$HT,3,3)),.after=vgoal)
+```
+
+سوال 8: محاسبه احتمال برنده شدن تیمی که در نیمه اول با اختلاف دو گل جلو می افتد
+
+```{r}
+GD2 <-spain %>% 
+  select(HT_hgoal,HT_vgoal,h_point) %>% 
+  mutate(HT_GD=HT_hgoal - HT_vgoal) %>% 
+  filter(abs(HT_GD)==2)
+
+TF <- sign(GD2$h_point)==sign(GD2$HT_GD+2)
+
+round(sum(TF)/length(TF),2)
+```
+سوال 6: 
+```{r}
+game_points <- gamepoint(spain)
+team_game_point <- game_points %>% 
+  select(Date,Team,Point) %>% 
+  spread(Team, Point)
+
+team_consecutive_point <- data.frame(Team=character() , Max_Win_in_row=integer() ,Max_Draw_in_row=integer() ,Max_Lose_in_row=integer() )
+
+for (i in 2:ncol(team_game_point) ){
+  consecutive <- rle(team_game_point[[i]][!is.na(team_game_point[[i]])])
+  data.frame(point=consecutive[[2]],iteration=consecutive[[1]]) %>% 
+    group_by(point) %>% 
+    summarise(Iteration=max(iteration)) -> team_it_point
+  team_consecutive_point[i-1,1] <- names(team_game_point[i])
+  team_consecutive_point[i-1,2:ncol(team_consecutive_point)] <- rev(team_it_point[,2][[1]])
+}
+team_consecutive_point
+
+for (i in 2:4){
+performance_in_row <-  filter(team_consecutive_point,team_consecutive_point[i]==max(team_consecutive_point[i]))[,c(1,i)]
+print(performance_in_row)
+}
+
+  
+```
+تشکیل دیتا فریم جدید که در آن همه تیمهای برنده 3 امتیاز گرفته باشند. کاربرد یرای مقایسه های پیش رو
+
+```{r}
+spain_2_3 <- spain 
+spain_2_3$h_point[spain_2_3$h_point==2] <- 3
+spain_2_3$v_point[spain_2_3$v_point==2] <- 3
+```
+
+
+سوال 10: در تقویم میلادی، اعتقادی خرافی وجود دارد که اگر سیزدهم ماه جمعه باشد، این روز
+خوشیمن نیست. تحقیق کنید آیا جمعه نحس، واقعا برای میزبان ها نحس بوده است؟
+برای بررسی نحس بودن، بررسی کردم که در جمعه های نحس چه تیم هایی میزبان بوده اند و این تیمها در کل لالیگا به طور میانگین در خانه چند امتیاز گرفته اند و در آن جمعه های نحس به طور میانگین در خانه چند امتیاز گرفته اند. 
+برای مقایسه صحیح تر، بازی های قبل 95 را هم فرض کردم که در صورت برد 3 امتیاز گرفته اند
+```{r}
+#Sys.setlocale("LC_TIME","English")
+spain2 <- spain_2_3 %>% 
+  mutate(Weekday=weekdays(Date),.after="Date") %>%
+  separate(Date,c("Year","Month","Day"),sep="-")
+cursed_plays <- spain2 %>% 
+  filter(Day==13,Weekday=="Friday")
+ 
+team_cursed_plays <-unique(cursed_plays$home)
+
+cursed_h_poin <- cursed_plays %>% 
+  summarise(sum_h_point=sum(h_point),n_play=n())
+mean_cursed_h_poin <- cursed_h_poin[[1]]/cursed_h_poin[[2]]
+
+
+team_cursed_total_h_poin <- spain_2_3 %>% 
+  filter(home %in% team_cursed_plays) %>% 
+  summarise(sum_h_point=sum(h_point),n_play=n())
+team_cursed_mean_total_h_poin <- round(team_cursed_total_h_poin[[1]]/team_cursed_total_h_poin[[2]],2)  
+
+cat("Teams played in cursed fridays= ",team_cursed_plays[1],", ",team_cursed_plays[2],", ",team_cursed_plays[3])
+cat("Mean points they get at home in these days= ",mean_cursed_h_poin)
+cat("Mean points they get at home in general= ",team_cursed_mean_total_h_poin)
+```
+
