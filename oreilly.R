@@ -26,3 +26,17 @@ mpg %>% ggplot(aes(x=class)) +
   
   
 theme_economist()  
+install.packages('nycflights13')
+library(nycflights13)
+?flights
+view(flights)
+flights$arr_delay[between(flights$arr_delay,0,21)]
+?between
+is.na(flights$dep_time)
+colnames(flights)
+flights %>% filter(!is.na(dep_time))
+table(flights$carrier)
+a<- colnames(flights)
+a
+one_of(a)
+flights %>% select(one_of('year', 'day', 'dep_time'))
